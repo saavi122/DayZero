@@ -1,0 +1,10 @@
+flask
+flask-cors
+python-dotenv
+requests
+werkzeug
+gunicorn
+pymongo[srv]
+dnspython
+certifi
+psycopg2-binary
