@@ -287,5 +287,5 @@ Open `http://localhost:5173` in your browser to access DayZero.
 ---
 
 ## Contact  
-**Website:** [DayZero](https://day-zero-pi.vercel.app/)
-**Demo Video:** [Video](https://drive.google.com/file/d/1APtAzTgQ1Jz7Q4CFpDKGosVGdWRiLyT_/view?usp=sharing)
+**Website:** [DayZero](https://day-zero-pi.vercel.app/).
+**Demo Video:** [Video](https://drive.google.com/file/d/1APtAzTgQ1Jz7Q4CFpDKGosVGdWRiLyT_/view?usp=sharing).
