@@ -31,3 +31,4 @@ jobs:
         with:
           folder: frontend/dist
           branch: gh-pages
+          clean: true
