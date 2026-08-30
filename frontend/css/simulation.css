@@ -1809,3 +1809,159 @@ html.dark .workspace-brief {
   background: var(--surface-soft) !important;
   border-bottom-color: var(--line) !important;
 }
+
+/* COMPREHENSIVE RESPONSIVE SIMULATION ROOM LAYOUT */
+
+.mobile-sim-nav {
+  display: none;
+  background: var(--sidebar-deep);
+  border-bottom: 1px solid var(--sidebar-line);
+  padding: 6px 12px;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.mobile-nav-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mobile-nav-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+@media (min-width: 1600px) {
+  .sim-reference-shell {
+    grid-template-columns: 280px 1fr 480px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .sim-reference-shell {
+    grid-template-columns: 220px 1fr 340px;
+  }
+}
+
+@media (max-width: 900px) {
+  .mobile-sim-nav {
+    display: flex;
+  }
+
+  .sim-reference-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 48px);
+    overflow: hidden;
+  }
+
+  .sim-reference-shell[data-mobile-active="sidebar"] .reference-sidebar {
+    display: flex !important;
+    flex: 1;
+    width: 100%;
+    overflow-y: auto;
+  }
+  .sim-reference-shell[data-mobile-active="sidebar"] .chat-surface,
+  .sim-reference-shell[data-mobile-active="sidebar"] .workspace-surface {
+    display: none !important;
+  }
+
+  .sim-reference-shell[data-mobile-active="chat"] .chat-surface {
+    display: flex !important;
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+  }
+  .sim-reference-shell[data-mobile-active="chat"] .reference-sidebar,
+  .sim-reference-shell[data-mobile-active="chat"] .workspace-surface {
+    display: none !important;
+  }
+
+  .sim-reference-shell[data-mobile-active="workspace"] .workspace-surface {
+    display: flex !important;
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+  }
+  .sim-reference-shell[data-mobile-active="workspace"] .reference-sidebar,
+  .sim-reference-shell[data-mobile-active="workspace"] .chat-surface {
+    display: none !important;
+  }
+
+  /* Default mobile view if no tab selected yet */
+  .sim-reference-shell:not([data-mobile-active]) .chat-surface {
+    display: flex !important;
+    flex: 1;
+  }
+  .sim-reference-shell:not([data-mobile-active]) .reference-sidebar,
+  .sim-reference-shell:not([data-mobile-active]) .workspace-surface {
+    display: none !important;
+  }
+
+  .chat-topbar {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .chat-topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .workspace-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .workspace-footer-meta {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .workspace-footer-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topic-copy h2 {
+    font-size: 0.88rem;
+  }
+  .topic-copy p {
+    font-size: 0.72rem;
+  }
+  .demo-pill {
+    font-size: 0.6rem;
+    height: 32px;
+    padding: 0 8px;
+  }
+  .workspace-jump-btn,
+  .footer-btn,
+  .primary-footer-btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+}

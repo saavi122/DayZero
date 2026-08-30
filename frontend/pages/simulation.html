@@ -23,6 +23,22 @@
 </head>
 
 <body>
+  <!-- MOBILE RESPONSIVE SIMULATION PANEL NAV -->
+  <nav class="mobile-sim-nav" id="mobileSimNav">
+    <button type="button" class="mobile-nav-btn active" data-target="chat">
+      <i data-lucide="message-square"></i>
+      <span>Chat</span>
+    </button>
+    <button type="button" class="mobile-nav-btn" data-target="sidebar">
+      <i data-lucide="users"></i>
+      <span>Team & Pulse</span>
+    </button>
+    <button type="button" class="mobile-nav-btn" data-target="workspace">
+      <i data-lucide="code-xml"></i>
+      <span>Workspace</span>
+    </button>
+  </nav>
+
   <div class="sim-reference-shell">
 
     <!-- LEFT SIDEBAR -->
@@ -273,6 +289,23 @@
     if (window.lucide) {
       lucide.createIcons();
     }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const navBtns = document.querySelectorAll(".mobile-nav-btn");
+      const shell = document.querySelector(".sim-reference-shell");
+      if (!navBtns.length || !shell) return;
+
+      navBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          navBtns.forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const target = btn.getAttribute("data-target");
+          if (target && shell) {
+            shell.setAttribute("data-mobile-active", target);
+          }
+        });
+      });
+    });
   </script>
 </body>
 </html>
