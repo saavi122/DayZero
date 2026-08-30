@@ -54,7 +54,7 @@ const LoadingScreen = ({ onComplete }) => {
         userSelect: 'none',
       }}
     >
-      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
         <ParticleText
           text="DAYZERO"
           particleSize={2.2}
@@ -68,7 +68,7 @@ const LoadingScreen = ({ onComplete }) => {
           repelRadius={135}
           idleDrift={0.65}
           trigger="mount"
-          fontSize="clamp(3.5rem, 12vw, 9rem)"
+          fontSize="clamp(2.2rem, 12vw, 8rem)"
           fontWeight={900}
           fontFamily="'Outfit', sans-serif"
           glow={true}
@@ -77,14 +77,16 @@ const LoadingScreen = ({ onComplete }) => {
       <div
         style={{
           position: 'absolute',
-          bottom: '40px',
-          color: '#4b5563',
-          fontSize: '11px',
+          bottom: '24px',
+          color: '#94a3b8',
+          fontSize: 'clamp(10px, 2.5vw, 12px)',
           fontFamily: "'Inter', sans-serif",
           letterSpacing: '2px',
-          opacity: 0.5,
+          opacity: 0.7,
           textTransform: 'uppercase',
           animation: 'pulse 2s infinite ease-in-out',
+          textAlign: 'center',
+          padding: '0 16px'
         }}
       >
         Click anywhere to enter

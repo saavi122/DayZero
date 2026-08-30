@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Menu, X } from 'lucide-react';
 
 const Navbar = ({ theme, onThemeToggle, onLoginClick, onSignupClick, onDemoClick, isRevealed }) => {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,12 +21,16 @@ const Navbar = ({ theme, onThemeToggle, onLoginClick, onSignupClick, onDemoClick
         opacity: isRevealed ? 1 : 0,
         transform: isRevealed ? 'translateY(0)' : 'translateY(-10px)',
         transition: 'opacity 0.8s ease, transform 0.8s ease',
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000
       }}
     >
       <div className="container navbar-inner">
         <a href="#product" className="logo">DayZero</a>
 
-        <div className="nav-links">
+        {/* Desktop Links */}
+        <div className="nav-links desktop-only">
           <a href="#product" className="nav-link">Product</a>
           <a href="#how" className="nav-link">How It Works</a>
           <a href="#benefits" className="nav-link">Benefits</a>
@@ -33,7 +38,8 @@ const Navbar = ({ theme, onThemeToggle, onLoginClick, onSignupClick, onDemoClick
           <a href="#contact" className="nav-link">Contact</a>
         </div>
 
-        <div className="nav-cta">
+        {/* Desktop CTA */}
+        <div className="nav-cta desktop-only">
           <button 
             className="theme-btn" 
             id="themeToggleBtn"
@@ -82,7 +88,67 @@ const Navbar = ({ theme, onThemeToggle, onLoginClick, onSignupClick, onDemoClick
             Sign Up
           </a>
         </div>
+
+        {/* Mobile Hamburger Toggle Button */}
+        <button 
+          className="mobile-nav-toggle"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          aria-label="Toggle navigation menu"
+        >
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </div>
+
+      {/* Mobile Drawer Overlay */}
+      {isMobileMenuOpen && (
+        <div className="mobile-menu-drawer">
+          <div className="mobile-menu-links">
+            <a href="#product" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Product</a>
+            <a href="#how" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>How It Works</a>
+            <a href="#benefits" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Benefits</a>
+            <a href="#recruiters" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Recruiters</a>
+            <a href="#contact" className="mobile-nav-link" onClick={() => setIsMobileMenuOpen(false)}>Contact</a>
+          </div>
+
+          <div className="mobile-menu-actions">
+            <button 
+              className="mobile-theme-btn" 
+              onClick={() => {
+                onThemeToggle();
+              }}
+            >
+              {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
+              <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+            </button>
+
+            <a 
+              href="#login" 
+              className="btn btn-secondary mobile-login-btn"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsMobileMenuOpen(false);
+                onLoginClick();
+              }}
+              style={{ textAlign: 'center' }}
+            >
+              Log In
+            </a>
+
+            <a 
+              href="#signup" 
+              className="btn btn-primary mobile-signup-btn"
+              onClick={(e) => {
+                e.preventDefault();
+                setIsMobileMenuOpen(false);
+                onSignupClick();
+              }}
+              style={{ textAlign: 'center' }}
+            >
+              Sign Up
+            </a>
+          </div>
+        </div>
+      )}
     </nav>
   );
 };
