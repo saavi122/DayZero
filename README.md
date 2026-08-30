@@ -1,9 +1,9 @@
 # 🌌 DayZero: AI-Powered Work Simulation Platform
 
-[![DayZero Logo](https://img.shields.io/badge/DayZero-Work%20Simulation%20OS-6366f1?style=for-the-badge&logo=visual-studio-code&logoColor=white)](https://github.com/Anishka2006/DayZero)
-[![Tech Stack](https://img.shields.io/badge/Stack-HTML5%20%7C%20CSS3%20%7C%20JS%20%7C%20Flask%20%7C%20MongoDB-0ea5e9?style=for-the-badge&logo=mongodb&logoColor=white)](https://github.com/Anishka2006/DayZero)
-[![AI Engine](https://img.shields.io/badge/AI-Gemini%20Flash-ef4444?style=for-the-badge&logo=google-gemini&logoColor=white)](https://github.com/Anishka2006/DayZero)
-[![Auth](https://img.shields.io/badge/Auth-JWT%20%26%20Domain%20Verification-10b981?style=for-the-badge&logo=json-web-tokens&logoColor=white)](https://github.com/Anishka2006/DayZero)
+[![DayZero Logo](https://img.shields.io/badge/DayZero-Work%20Simulation%20OS-6366f1?style=for-the-badge&logo=visual-studio-code&logoColor=white)](https://github.com/saavi122/DayZero)
+[![Tech Stack](https://img.shields.io/badge/Stack-HTML5%20%7C%20CSS3%20%7C%20JS%20%7C%20Flask%20%7C%20MongoDB-0ea5e9?style=for-the-badge&logo=mongodb&logoColor=white)](https://github.com/saavi122/DayZero)
+[![AI Engine](https://img.shields.io/badge/AI-Gemini%20Flash-ef4444?style=for-the-badge&logo=google-gemini&logoColor=white)](https://github.com/saavi122/DayZero)
+[![Auth](https://img.shields.io/badge/Auth-JWT%20%26%20Domain%20Verification-10b981?style=for-the-badge&logo=json-web-tokens&logoColor=white)](https://github.com/saavi122/DayZero)
 
 DayZero is a premium, investor-ready, and recruiter-friendly **AI-Powered Work Simulation Platform** that bridges the gap between academic learning and industry expectations. Instead of relying on static resumes or generic multiple-choice questions (MCQs), DayZero introduces candidates to a live, high-fidelity corporate room environment (inspired by Slack, Notion, and Linear) where they tackle real-world engineering, design, and product sprints alongside interactive AI teammates under dynamic workplace pressure.
 
@@ -68,32 +68,6 @@ At the end of the sprint, the platform generates a verified, high-fidelity **Ski
 - **Custom Workflow Setup:** Create new project briefs and simulation parameters tailored to company products.
 - **Domain Verification Settings:** Manage authorized recruiter domains and workspace members.
 - **Hiring Integration:** Configure default role expectations, difficulty levels, and hiring pipelines.
-
----
-
-### 2. The AI Sprint Teammates
-
-To simulate a real engineering sprint, candidates collaborate with 5 core AI agents, each with unique professional priorities and communication styles:
-
-```
-               ┌───────────────────────────────────────────────────┐
-               │              AI Sprint Teammates                  │
-               ├─────────────────┬─────────────────────────────────┤
-               │ 👩‍💼 Asha (PM)    │ Priorities, Deadlines, UX Pain  │
-               │ 👨‍💻 Ravi (Lead)  │ Architecture, Risk, Rollbacks   │
-               │ 🎨 Mira (UX)    │ Accessibility, User Friction    │
-               │ 🕵️‍♂️ Kenji (QA)   │ Edge Cases, Release Blockers    │
-               │ 📈 Leah (Data)  │ Conversion, SQL, Metrics        │
-               └─────────────────┴─────────────────────────────────┘
-```
-
-- **👩‍💼 Asha (Product Manager):** Focuses on task priorities, customer-facing scope, business deadlines, user pain points, and release decisions.
-- **👨‍💻 Ravi (Engineering Lead):** Focuses on system architecture, database scalability, technical rollback strategy, security parameters, and implementation risk.
-- **🎨 Mira (Product Designer):** Focuses on user-experience clarity, onboarding friction, visual accessibility, consistency, and copy clarity.
-- **🕵️‍♂️ Kenji (QA Engineer):** Focuses on functional edge cases, regression paths, release blockers, recovery proofs, and input validation gaps.
-- **📈 Leah (Data Analyst):** Focuses on business metrics, conversion funnels, query bottlenecks, retention trends, and A/B test results.
-- **🔍 Quinn (AI Evaluator):** Never participates in the sprint chat. At submission, Quinn evaluates the transcript, system logs, code edits, and behavior records to draft the final SkillRecord.
-- **👁️ The Observer (System Agent):** Silently runs in the background. It measures metrics like speed-to-reply, adaptability to crisis triggers, and collaboration depth, feeding them directly into Quinn's evaluation engine.
 
 ---
 
@@ -363,16 +337,9 @@ npx live-server .
 
 ---
 
-## 📄 License
-
-Distributed under the **MIT License**. See `LICENSE` for more information.
-
----
-
 ## 📞 Contact
-
-**Contributors:** Anishka, Saavi, Richa, Neha, Akshaya       
-**Project Link:** [LINK](https://anishka2006.github.io/DayZero/)  
+       
+**Project Link:** [LINK](https://saavi122.github.io/DayZero/)  
 **Demo Video Link:** [LINK](https://drive.google.com/file/d/1uaeXJTsX1YiQnDN5_-6x9MYpOOLvvur5/view?usp=sharing)
 
 ---
