@@ -36,7 +36,7 @@ const techLogos = [
   { node: <SiDocker />, title: "Docker", href: "https://www.docker.com" }
 ];
 
-const LandingPage = ({ isRevealed }) => {
+const LandingPage = ({ isRevealed, onNavigate }) => {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [activeModal, setActiveModal] = useState(null); // null | 'registration' | 'auth-login' | 'auth-signup'
   const [modalTitle, setModalTitle] = useState('Get Started');
@@ -164,6 +164,7 @@ const LandingPage = ({ isRevealed }) => {
         onClose={() => setActiveModal(null)}
         initialMode={activeModal === 'auth-signup' ? 'signup' : 'login'}
         showToast={showToast}
+        onNavigate={onNavigate}
       />
 
       {/* Toast Messages */}

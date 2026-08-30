@@ -100,8 +100,19 @@ function parseRecruiterEmail(email) {
   };
 }
 
-const AuthModal = ({ isOpen, onClose, initialMode = 'login', showToast }) => {
+const AuthModal = ({ isOpen, onClose, initialMode = 'login', showToast, onNavigate }) => {
   const [mode, setMode] = useState(initialMode); // 'login' | 'signup'
+
+  const navigateTo = (targetPath) => {
+    localStorage.setItem('dayzero_current_route', targetPath);
+    if (onNavigate) {
+      onNavigate(targetPath);
+    } else {
+      const isGhPages = window.location.pathname.includes('/DayZero');
+      const prefix = isGhPages ? '/DayZero' : '';
+      window.location.href = prefix + targetPath;
+    }
+  };
   const [role, setRole] = useState('user'); // 'user' | 'recruiter'
   
   const [name, setName] = useState('');
@@ -231,8 +242,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login', showToast }) => {
 
     onClose();
     setTimeout(() => {
-      window.location.href = "/dashboard";
-    }, 600);
+      navigateTo('/dashboard');
+    }, 400);
   };
 
   const executeRecruiterLogin = (targetEmail) => {
@@ -272,8 +283,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login', showToast }) => {
 
     onClose();
     setTimeout(() => {
-      window.location.href = "/recruiter";
-    }, 600);
+      navigateTo('/recruiter');
+    }, 400);
   };
 
   const handleSubmit = async (e) => {
