@@ -372,19 +372,19 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login', showToast, onNaviga
               DayZero Simulation OS
             </div>
 
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '8px', color: '#F2EFF9', lineHeight: 1.25 }}>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '6px', color: '#F2EFF9', lineHeight: 1.25 }}>
               {role === 'recruiter' 
                 ? (mode === 'login' ? "Welcome Recruiter" : "Hire Job-Ready Talent")
                 : (mode === 'login' ? "Experience Work Before Day One" : "Build Verified Proof of Work")}
             </h3>
 
-            <p style={{ fontSize: '0.85rem', color: '#ADA6BE', lineHeight: 1.5, marginBottom: '20px' }}>
+            <p className="auth-subtitle-desc" style={{ fontSize: '0.85rem', color: '#ADA6BE', lineHeight: 1.5, marginBottom: '16px' }}>
               {role === 'recruiter'
                 ? "Evaluate candidates in realistic live sprint rooms with verified SkillRecord signals."
                 : "Complete real-world tasks inside live simulated environments and showcase your execution."}
             </p>
 
-            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: '#D5C7E6' }}>
+            <ul className="auth-feature-list" style={{ listStyle: 'none', padding: 0, margin: '0 0 16px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', color: '#D5C7E6' }}>
               <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CheckCircle2 size={14} color="#10b981" /> Practical Role Simulations
               </li>
