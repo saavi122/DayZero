@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DayZero Redirecting...</title>
+  <script>
+    (function() {
+      var path = window.location.pathname;
+      var search = window.location.search;
+      var hash = window.location.hash;
+      
+      var route = path.replace('/DayZero', '');
+      if (!route || route === '/') route = '/dashboard';
+      
+      localStorage.setItem('dayzero_current_route', route + search + hash);
+      window.location.replace(window.location.origin + '/DayZero/');
+    })();
+  </script>
+</head>
+<body>
+</body>
+</html>
