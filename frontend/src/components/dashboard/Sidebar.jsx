@@ -56,10 +56,13 @@ const Sidebar = ({
           </div>
           <button 
             className="collapse-btn" 
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            onClick={() => {
+              setIsCollapsed(true);
+              if (setIsMobileShow) setIsMobileShow(false);
+            }}
+            title="Collapse Sidebar"
           >
-            {isCollapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
+            <ChevronLeft size={18} />
           </button>
         </div>
 
@@ -76,13 +79,14 @@ const Sidebar = ({
                 onClick={(e) => {
                   e.preventDefault();
                   setActivePanel(item.id);
+                  if (setIsMobileShow) setIsMobileShow(false);
                   if (window.innerWidth <= 960) {
-                    setIsMobileShow(false);
+                    setIsCollapsed(true);
                   }
                 }}
               >
                 <Icon size={18} />
-                {!isCollapsed && <span>{item.label}</span>}
+                <span>{item.label}</span>
               </a>
             );
           })}

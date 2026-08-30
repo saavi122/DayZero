@@ -101,8 +101,35 @@ body.dark .menu-item.active {
   transition: width 0.3s ease, transform 0.3s ease;
 }
 
+.sidebar-toggle-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--card-sub);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  background: rgba(136, 112, 158, 0.15);
+  border-color: var(--accent);
+}
+
 .sidebar.collapsed {
-  width: 80px;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  border-right: none !important;
+  pointer-events: none !important;
 }
 
 .sidebar-top {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Moon, Sun, ArrowLeft, Building2, UserPlus, Download } from 'lucide-react';
+import { Search, Moon, Sun, ArrowLeft, UserPlus, Download, Menu } from 'lucide-react';
 
 const RecruiterHeader = ({ 
   theme, 
@@ -8,11 +8,21 @@ const RecruiterHeader = ({
   setSearchQuery, 
   onNavigate,
   onOpenInviteModal,
-  showToast
+  showToast,
+  onSidebarToggle
 }) => {
   return (
     <header className="recruiter-header">
       <div className="recruiter-header-left">
+        <button 
+          className="sidebar-toggle-btn"
+          onClick={onSidebarToggle}
+          title="Toggle Navigation Menu"
+          style={{ background: 'var(--rec-surface2)', border: '1px solid var(--rec-border)', borderRadius: '9px', padding: '8px 10px', color: 'var(--rec-text)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+        >
+          <Menu size={18} />
+        </button>
+
         <button 
           onClick={() => onNavigate && onNavigate('/')}
           style={{ background: 'transparent', border: 'none', color: 'var(--rec-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px' }}

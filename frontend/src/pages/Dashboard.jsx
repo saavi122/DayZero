@@ -293,7 +293,10 @@ Guidelines:
             onThemeToggle={handleThemeToggle}
             pressure={pressure}
             onPressureToggle={handlePressureToggle}
-            onMobileMenuToggle={() => setIsMobileShow(!isMobileShow)}
+            onMobileMenuToggle={() => {
+              setIsCollapsed(prev => !prev);
+              setIsMobileShow(prev => !prev);
+            }}
             onExitSimulation={() => onNavigate && onNavigate('/')}
           />
 

@@ -254,6 +254,7 @@ const RecruiterDashboard = ({ onNavigate }) => {
           onNavigate={onNavigate}
           onOpenInviteModal={() => setIsInviteModalOpen(true)}
           showToast={showToast}
+          onSidebarToggle={() => setIsCollapsed(prev => !prev)}
         />
 
         <main className="recruiter-main">

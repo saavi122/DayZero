@@ -29,7 +29,7 @@ const TopBar = ({
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <button className="mobile-menu-btn" onClick={onMobileMenuToggle} title="Open navigation">
+        <button className="sidebar-toggle-btn" onClick={onMobileMenuToggle} title="Toggle navigation menu">
           <Menu size={20} />
         </button>
 
