@@ -1,0 +1,13 @@
+{
+  "name": "dayzero-project",
+  "version": "1.0.0",
+  "description": "DayZero - AI-Powered Hiring Platform Workspace",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "preview": "npm run preview --prefix frontend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

@@ -1,0 +1,1426 @@
+from __future__ import annotations
+from flask import Flask, request, jsonify
+import os
+import sys
+import logging
+from pathlib import Path
+from flask_cors import CORS
+from dotenv import load_dotenv
+try:
+    from .db import db as mongo_db
+    from .db import invited_candidates_collection, users_collection, projects_collection, invites_collection
+except ImportError:
+    from db import db as mongo_db
+    from db import invited_candidates_collection, users_collection, projects_collection, invites_collection
+from pymongo import MongoClient
+import pymongo
+from datetime import datetime
+from werkzeug.security import check_password_hash, generate_password_hash
+
+app = Flask(__name__)
+
+app.logger.setLevel(os.getenv("DAYZERO_LOG_LEVEL", "INFO").upper())
+
+app.config['CORS_HEADERS'] = 'Content-Type'
+
+import re
+CORS(app, resources={r"/*": {
+    "origins": [
+        "https://anishka2006.github.io",
+        "https://saavi122.github.io",
+        re.compile(r"^https://.*\.github\.io$"),
+        re.compile(r"^https://.*\.onrender\.com$"),
+        re.compile(r"^https?://localhost(:\d+)?$"),
+        re.compile(r"^https?://127\.0\.0\.1(:\d+)?$")
+    ],
+    "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
+    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+}})
+
+@app.before_request
+def log_request_info():
+    app.logger.info("--- Request Info ---")
+    app.logger.info(f"Method: {request.method}")
+    app.logger.info(f"Path: {request.path}")
+    app.logger.info(f"Origin: {request.headers.get('Origin')}")
+    if request.is_json:
+        app.logger.info(f"Payload: {request.get_json(silent=True)}")
+    app.logger.info("--------------------")
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    app.logger.error(f"Global exception caught: {str(e)}", exc_info=True)
+    
+    # Check if PyMongo Error
+    import pymongo
+    if isinstance(e, pymongo.errors.PyMongoError):
+        return jsonify({
+            "success": False,
+            "error": f"Database error: {str(e)}"
+        }), 500
+        
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return jsonify({
+            "success": False,
+            "error": e.description,
+            "code": e.code
+        }), e.code
+        
+    return jsonify({
+        "success": False,
+        "error": f"Unexpected backend error: {str(e)}"
+    }), 500
+
+@app.route("/api/user-profile", methods=["GET"])
+def get_user_profile():
+
+    email = request.args.get("email")
+
+    user = users_collection.find_one({
+        "email": email
+    })
+
+    if not user:
+        return jsonify({
+            "success": False,
+            "message": "User not found"
+        }), 404
+
+    user.pop("password_hash", None)
+
+    user["_id"] = str(user["_id"])
+
+    return jsonify(user)
+import uuid
+
+APPROVED_RECRUITER_DOMAINS = {
+    "google.com",
+    "microsoft.com",
+    "amazon.com",
+    "apple.com",
+    "meta.com",
+    "facebook.com",
+    "netflix.com",
+    "adobe.com",
+    "tesla.com",
+    "linkedin.com",
+    "uber.com",
+    "airbnb.com",
+    "spotify.com",
+    "slack.com",
+    "salesforce.com",
+    "ibm.com",
+    "oracle.com",
+    "cisco.com",
+    "intel.com",
+    "qualcomm.com",
+    "vmware.com",
+    "redhat.com",
+}
+
+
+def _email_domain(email: str) -> str:
+    parts = str(email or "").split("@", 1)
+    return parts[1].lower() if len(parts) == 2 else ""
+
+
+def _public_user(user: dict) -> dict:
+    return {
+        "id": str(user.get("_id") or user.get("id") or ""),
+        "name": user.get("name") or user.get("full_name") or "User",
+        "email": user.get("email"),
+        "role": user.get("role") or "user",
+        "companyId": user.get("companyId"),
+        "companyName": user.get("companyName"),
+        "projectId": user.get("projectId"),
+        "projectTitle": user.get("projectTitle"),
+        "experienceLevel": user.get("experienceLevel"),
+        "assignedRole": user.get("assignedRole"),
+    }
+
+
+def _clean(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return value
+
+
+def _first_present(*values):
+    for value in values:
+        cleaned = _clean(value)
+        if cleaned is not None:
+            return cleaned
+    return None
+
+
+def _normalize_invite_record(primary: dict | None, fallback: dict | None = None) -> dict | None:
+    if not primary and not fallback:
+        return None
+
+    primary = dict(primary or {})
+    fallback = dict(fallback or {})
+    normalized = {**fallback, **primary}
+
+    normalized["email"] = _first_present(primary.get("email"), primary.get("candidateEmail"), fallback.get("email"), fallback.get("candidateEmail"))
+    normalized["name"] = _first_present(primary.get("name"), primary.get("candidateName"), fallback.get("name"), fallback.get("candidateName"), "Invited Candidate")
+    normalized["companyId"] = _first_present(primary.get("companyId"), primary.get("company"), fallback.get("companyId"), fallback.get("company"))
+    normalized["companyName"] = _first_present(primary.get("companyName"), primary.get("company"), fallback.get("companyName"), fallback.get("company"))
+    normalized["projectId"] = _first_present(primary.get("projectId"), primary.get("projectAssigned"), fallback.get("projectId"), fallback.get("projectAssigned"))
+    normalized["projectTitle"] = _first_present(primary.get("projectTitle"), primary.get("projectName"), fallback.get("projectTitle"), fallback.get("projectName"))
+    normalized["projectName"] = _first_present(primary.get("projectName"), primary.get("projectTitle"), fallback.get("projectName"), fallback.get("projectTitle"))
+    normalized["role"] = _first_present(primary.get("role"), primary.get("assignedRole"), primary.get("roleAssigned"), fallback.get("role"), fallback.get("assignedRole"), fallback.get("roleAssigned"), "Frontend Engineer")
+    normalized["roleAssigned"] = _first_present(primary.get("roleAssigned"), primary.get("assignedRole"), primary.get("role"), fallback.get("roleAssigned"), fallback.get("assignedRole"), fallback.get("role"))
+    normalized["assignedRole"] = _first_present(primary.get("assignedRole"), primary.get("roleAssigned"), primary.get("role"), fallback.get("assignedRole"), fallback.get("roleAssigned"), fallback.get("role"))
+    normalized["experienceLevel"] = _first_present(primary.get("experienceLevel"), fallback.get("experienceLevel"), "Intermediate")
+    normalized["status"] = _first_present(primary.get("status"), primary.get("inviteStatus"), fallback.get("status"), fallback.get("inviteStatus"), "active")
+    normalized["inviteStatus"] = _first_present(primary.get("inviteStatus"), primary.get("status"), fallback.get("inviteStatus"), fallback.get("status"), "active")
+
+    return normalized
+
+
+def _get_valid_invite(email: str):
+    email_clean = str(email or "").strip().lower()
+
+    invite = invited_candidates_collection.find_one({"email": email_clean})
+    db_invite = invites_collection.find_one({"email": email_clean})
+    
+    merged = None
+    if db_invite:
+        merged = _normalize_invite_record(db_invite, invite)
+    elif invite:
+        merged = _normalize_invite_record(invite)
+        
+    if merged:
+        status = str(merged.get("status") or merged.get("inviteStatus") or "").strip().lower()
+        if status not in {"revoked", "cancelled", "expired"}:
+            return merged
+            
+    return None
+
+
+@app.route("/signup", methods=["POST"])
+@app.route("/api/signup", methods=["POST"])
+def signup():
+    data = request.get_json(silent=True) or {}
+
+    name = str(data.get("name") or "").strip()
+    email = str(data.get("email") or "").strip().lower()
+    password = str(data.get("password") or "")
+    role = str(data.get("role") or "user").strip().lower()
+
+    if not name or not email or not password:
+        return jsonify({"success": False, "error": "Name, email, and password are required."}), 400
+    if role not in {"user", "candidate", "recruiter", "invited candidate", "demo user"}:
+        return jsonify({"success": False, "error": "Invalid role."}), 400
+    if role == "candidate":
+        role = "user"
+
+    if role == "recruiter" and _email_domain(email) not in APPROVED_RECRUITER_DOMAINS:
+        return jsonify({
+            "success": False,
+            "error": "Recruiter registration requires an approved company email."
+        }), 403
+
+    invite_details = {}
+    if role in {"user", "invited candidate"}:
+        invite = _get_valid_invite(email)
+        if invite:
+            invite_details = {
+                "companyId": invite.get("companyId"),
+                "companyName": invite.get("companyName"),
+                "projectId": invite.get("projectId"),
+                "projectTitle": invite.get("projectTitle"),
+                "experienceLevel": invite.get("experienceLevel"),
+                "assignedRole": invite.get("assignedRole"),
+            }
+            role = "invited candidate"
+
+    user = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "email": email,
+        "role": role,
+        "password_hash": generate_password_hash(password),
+        "updatedAt": datetime.utcnow().isoformat(),
+        **invite_details,
+    }
+
+    users_collection.update_one(
+        {"email": email},
+        {
+            "$set": user,
+            "$setOnInsert": {
+                "_id": user["id"],
+                "createdAt": datetime.utcnow().isoformat(),
+                "score": 0,
+                "progress": 0,
+            },
+        },
+        upsert=True,
+    )
+    saved = users_collection.find_one({"email": email}) or user
+    return jsonify({"success": True, "message": "Signup successful", "user": _public_user(saved)}), 200
+
+
+@app.route("/login", methods=["POST"])
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email") or "").strip().lower()
+    password = str(data.get("password") or "")
+    requested_role = str(data.get("role") or "").strip().lower()
+
+    if not email or not password:
+        return jsonify({"success": False, "error": "Email and password are required."}), 400
+
+    user = users_collection.find_one({"email": email})
+    stored_hash = str((user or {}).get("password_hash") or "")
+    legacy_password = str((user or {}).get("password") or "")
+    password_ok = bool(stored_hash and check_password_hash(stored_hash, password)) or bool(legacy_password and legacy_password == password)
+    if not user or not password_ok:
+        return jsonify({"success": False, "error": "Invalid email or password."}), 401
+
+    user_role = str(user.get("role") or "user").lower()
+    if requested_role and requested_role not in {user_role, "candidate"}:
+        return jsonify({"success": False, "error": f"This account is registered as '{user_role}'."}), 403
+
+    invite = _get_valid_invite(email)
+    if invite and user_role in {"user", "candidate", "invited candidate"}:
+        users_collection.update_one(
+            {"email": email},
+            {"$set": {
+                "role": "invited candidate",
+                "companyId": invite.get("companyId"),
+                "companyName": invite.get("companyName"),
+                "projectId": invite.get("projectId"),
+                "projectTitle": invite.get("projectTitle"),
+                "experienceLevel": invite.get("experienceLevel"),
+                "assignedRole": invite.get("assignedRole"),
+            }},
+        )
+        user = users_collection.find_one({"email": email}) or user
+
+    return jsonify({
+        "success": True,
+        "message": "Login successful",
+        "access_token": str(user.get("_id") or user.get("id") or ""),
+        "user": _public_user(user),
+    }), 200
+
+
+@app.route("/api/invites", methods=["POST", "OPTIONS"])
+@app.route("/api/invite-candidate", methods=["POST", "OPTIONS"])
+def create_invite():
+    import traceback
+    if request.method == "OPTIONS":
+        response = jsonify({"success": True})
+        origin = request.headers.get("Origin")
+        if origin:
+            response.headers.add("Access-Control-Allow-Origin", origin)
+        else:
+            response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+
+        return response, 200
+    
+    try:
+        # User task: Log "INVITE REQUEST RECEIVED" and log request body
+        print("INVITE REQUEST RECEIVED")
+        app.logger.info("INVITE REQUEST RECEIVED")
+        
+        data = request.get_json(silent=True) or {}
+        print("REQUEST BODY:", data)
+        app.logger.info(f"REQUEST BODY: {data}")
+        
+        email = (data.get("candidateEmail") or data.get("email") or "").strip().lower()
+        name = (data.get("candidateName") or data.get("name") or "").strip()
+        college = (data.get("college") or "").strip()
+        skills = data.get("skills") or ""
+        sim_type = data.get("simulationType") or data.get("simType") or "individual"
+        role = data.get("role") or "Frontend Engineer"
+        project_id = data.get("projectId")
+        project_simulation = data.get("projectSimulation")
+        project_title = data.get("projectTitle") or project_simulation or ""
+        experience_level = data.get("experienceLevel") or "Intermediate"
+        message = data.get("inviteMessage") or data.get("message") or ""
+        
+        # Recruiter and company info
+        company_id = data.get("companyId", "").strip().lower()
+        company_name = data.get("companyName", "").strip()
+        recruiter_id = data.get("recruiterId", "").strip()
+        
+        if not email or not name:
+            app.logger.error("Invite validation failed: Candidate Email and Name are required")
+            return jsonify({"success": False, "error": "Candidate Email and Name are required"}), 400
+            
+        # Dynamic project matching and assignment via projects_collection
+        assigned_project = None
+        
+        # User task: Log "LOOKING UP PROJECT"
+        print("LOOKING UP PROJECT")
+        app.logger.info("LOOKING UP PROJECT")
+        
+        # 1. Search by project ID in db
+        if project_id:
+            try:
+                assigned_project = _find_project_by_id(project_id)
+            except Exception as find_err:
+                app.logger.error(f"Failed to find project by ID: {find_err}")
+                raise find_err
+            
+        # 2. Search by exact project title
+        if not assigned_project and project_title:
+            try:
+                assigned_project = projects_collection.find_one({"title": {"$regex": f"^{re.escape(project_title)}$", "$options": "i"}})
+            except Exception as find_err:
+                app.logger.error(f"Failed to find project by exact Title: {find_err}")
+                raise find_err
+            
+        # 3. Search by containing project title (substring)
+        if not assigned_project and project_title:
+            try:
+                assigned_project = projects_collection.find_one({"title": {"$regex": re.escape(project_title), "$options": "i"}})
+            except Exception as find_err:
+                app.logger.error(f"Failed to find project by substring Title: {find_err}")
+                raise find_err
+            
+        # 4. Special fallback: if "Linked Frontend Console" or "Frontend Console", match it
+        if not assigned_project and ("Frontend Console" in project_title or "Linked Frontend Console" in project_title):
+            try:
+                assigned_project = projects_collection.find_one({"title": {"$regex": "Frontend Console", "$options": "i"}})
+            except Exception as find_err:
+                app.logger.error(f"Failed to find project by fallback Title: {find_err}")
+                raise find_err
+            
+        # 5. If STILL not found, let's create this project dynamically in db so that it exists and has a real ID!
+        if not assigned_project:
+            new_project_id = project_id or str(uuid.uuid4())
+            new_project_title = project_title or "Linked Frontend Console"
+            assigned_project = {
+                "_id": new_project_id,
+                "id": new_project_id,
+                "title": new_project_title,
+                "description": "Develop the primary consumer interaction interface.",
+                "techStack": "React, TypeScript, TailwindCSS, Vite",
+                "deadline": "2026-10-01",
+                "status": "Planning",
+                "createdAt": datetime.utcnow().isoformat(),
+                "companyId": company_id or "default"
+            }
+            try:
+                projects_collection.update_one(
+                    {"title": new_project_title},
+                    {"$set": assigned_project},
+                    upsert=True
+                )
+                # Re-fetch the saved project
+                assigned_project = projects_collection.find_one({"title": new_project_title})
+            except Exception as seed_err:
+                app.logger.error(f"Failed to seed project: {seed_err}")
+                raise seed_err
+            
+        # User task: Log "PROJECT: <project>"
+        print("PROJECT:", assigned_project)
+        app.logger.info(f"PROJECT: {assigned_project}")
+        
+        # Overwrite values with verified database records
+        project_id = assigned_project.get("id") or str(assigned_project.get("_id"))
+        project_title = assigned_project.get("title")
+            
+        token = str(uuid.uuid4())
+        invite_id = str(uuid.uuid4())
+        
+        invite = {
+            "_id": invite_id,
+            "id": invite_id,
+            "email": email,
+            "name": name,
+            "candidateName": name,
+            "candidateEmail": email,
+            "college": college,
+            "skills": skills,
+            "simType": sim_type,
+            "role": role,
+            "projectId": project_id,
+            "projectTitle": project_title,
+            "experienceLevel": experience_level,
+            "message": message,
+            "companyId": company_id,
+            "companyName": company_name,
+            "recruiterId": recruiter_id,
+            "projectAssigned": project_id,
+            "roleAssigned": role,
+            "inviteStatus": "active",
+            "status": "active",
+            "token": token,
+            "inviteToken": token,
+            "createdAt": datetime.utcnow().isoformat(),
+            "updatedAt": datetime.utcnow().isoformat()
+        }
+        
+        # Save to database
+        invite_data = invite.copy()
+        invite_id_val = invite_data.pop("_id")
+
+        # User task: Log "SAVING INVITE"
+        print("SAVING INVITE")
+        app.logger.info("SAVING INVITE")
+        
+        try:
+            update_res = invited_candidates_collection.update_one(
+                {"email": email},
+                {
+                    "$set": invite_data,
+                    "$setOnInsert": {"_id": invite_id_val}
+                },
+                upsert=True
+            )
+            # User task: Log candidate creation and MongoDB save results
+            app.logger.info(f"MongoDB update_one result: matched={update_res.matched_count}, modified={update_res.modified_count}, upserted_id={update_res.upserted_id}")
+        except Exception as save_err:
+            app.logger.error(f"Failed to save candidate invite: {save_err}")
+            raise save_err
+        
+        # User task: Log "INVITE SAVED"
+        print("INVITE SAVED")
+        app.logger.info("INVITE SAVED")
+        
+        return jsonify({
+            "success": True, 
+            "message": "✓ Candidate Invited Successfully", 
+            "inviteId": invite_id,
+            "inviteToken": token,
+            "invite": invite
+        }), 201
+        
+    except pymongo.errors.PyMongoError as db_err:
+        # User task: Log "INVITE ERROR:" and stack trace
+        print("INVITE ERROR:", db_err)
+        tb = traceback.format_exc()
+        app.logger.error(f"INVITE ERROR: {db_err}\n{tb}")
+        return jsonify({
+            "success": False, 
+            "message": str(db_err),
+            "stack": tb
+        }), 500
+    except Exception as e:
+        # User task: Log "INVITE ERROR:" and stack trace
+        print("INVITE ERROR:", e)
+        tb = traceback.format_exc()
+        app.logger.error(f"INVITE ERROR: {e}\n{tb}")
+        return jsonify({
+            "success": False, 
+            "message": str(e),
+            "stack": tb
+        }), 500
+
+
+@app.route("/api/invites", methods=["GET"])
+def get_invites():
+    company_id = request.args.get("companyId", "").strip().lower()
+    recruiter_id = request.args.get("recruiterId", "").strip()
+    
+    query = {}
+    if company_id:
+        query["companyId"] = company_id
+    if recruiter_id:
+        query["recruiterId"] = recruiter_id
+        
+    invites = list(invited_candidates_collection.find(query))
+    for inv in invites:
+        inv["_id"] = str(inv["_id"])
+        
+    return jsonify({"success": True, "invites": invites}), 200
+
+
+@app.route("/api/invites/validate", methods=["GET"])
+def validate_invite():
+    email = request.args.get("email", "").strip().lower()
+    
+    # 9. Add logs: LOGIN EMAIL
+    print(f"LOGIN EMAIL: {email}")
+    app.logger.info(f"LOGIN EMAIL: {email}")
+    
+    if not email:
+        print("ACCESS DENIED")
+        app.logger.info("ACCESS DENIED")
+        return jsonify({"success": False, "error": "Email is required"}), 400
+        
+    invite = _get_valid_invite(email)
+    invite_found = invite is not None
+    
+    # 9. Add logs: INVITE FOUND
+    print(f"INVITE FOUND: {invite_found}")
+    app.logger.info(f"INVITE FOUND: {invite_found}")
+    
+    # 9. Add logs: INVITE STATUS
+    invite_status = str(invite.get("status") or invite.get("inviteStatus") or "none").strip().lower() if invite else "none"
+    print(f"INVITE STATUS: {invite_status}")
+    app.logger.info(f"INVITE STATUS: {invite_status}")
+    
+    if not invite:
+        # 9. Add logs: ACCESS DENIED
+        print("ACCESS DENIED")
+        app.logger.info("ACCESS DENIED")
+        return jsonify({"success": True, "invited": False}), 200
+        
+    # 9. Add logs: ACCESS GRANTED
+    print("ACCESS GRANTED")
+    app.logger.info("ACCESS GRANTED")
+
+    # Ensure projectId and projectTitle map to the actual MongoDB project document!
+    real_project_id = invite.get("projectId")
+    real_project_title = invite.get("projectTitle")
+    db_project = None
+    
+    if real_project_id:
+        db_project = _find_project_by_id(real_project_id)
+    if not db_project and real_project_title:
+        db_project = projects_collection.find_one({"title": {"$regex": f"^{re.escape(real_project_title)}$", "$options": "i"}})
+        
+    if not db_project:
+        # Dynamically seed it in MongoDB Atlas!
+        new_project_id = str(uuid.uuid4())
+        new_project_title = real_project_title or "LinkedIn ML Core Engine"
+        db_project = {
+            "_id": new_project_id,
+            "id": new_project_id,
+            "title": new_project_title,
+            "description": "Develop the primary user interface and logic for the assigned corporate simulation room.",
+            "techStack": "React, TypeScript, TailwindCSS, Vite",
+            "deadline": "2026-10-01",
+            "status": "Planning",
+            "createdAt": datetime.utcnow().isoformat(),
+            "companyId": invite.get("companyId") or "default"
+        }
+        projects_collection.update_one(
+            {"title": new_project_title},
+            {"$set": db_project},
+            upsert=True
+        )
+        db_project = projects_collection.find_one({"title": new_project_title})
+
+    if db_project:
+        real_project_id = db_project.get("id") or str(db_project.get("_id"))
+        real_project_title = db_project.get("title")
+        invite["projectId"] = real_project_id
+        invite["projectTitle"] = real_project_title
+        invite["projectName"] = real_project_title
+        
+    invite["assignedRole"] = invite.get("role") or invite.get("roleAssigned") or "Frontend Engineer"
+    invite["role"] = invite.get("role") or invite.get("roleAssigned") or "Frontend Engineer"
+
+    # Always synchronize/update candidate profile in the users collection with the latest invite details!
+    print("Synchronizing candidate profile in users collection with the latest invite details")
+    app.logger.info("Synchronizing candidate profile in users collection with the latest invite details")
+    
+    invite_details = {
+        "companyId": invite.get("companyId"),
+        "companyName": invite.get("companyName"),
+        "projectId": invite.get("projectId"),
+        "projectTitle": invite.get("projectTitle"),
+        "projectName": invite.get("projectTitle"),
+        "experienceLevel": invite.get("experienceLevel"),
+        "assignedRole": invite.get("assignedRole"),
+    }
+    
+    user_id = str(uuid.uuid4())
+    user_update = {
+        "name": invite.get("name") or invite.get("candidateName") or "Invited Candidate",
+        "role": "invited candidate",
+        "updatedAt": datetime.utcnow().isoformat(),
+        **invite_details,
+    }
+    
+    users_collection.update_one(
+        {"email": email},
+        {
+            "$set": user_update,
+            "$setOnInsert": {
+                "id": user_id,
+                "_id": user_id,
+                "password_hash": generate_password_hash("password123"), # Safe fallback
+                "createdAt": datetime.utcnow().isoformat(),
+                "score": 0,
+                "progress": 0,
+            },
+        },
+        upsert=True,
+    )
+
+    if "_id" in invite:
+        invite["_id"] = str(invite["_id"])
+    else:
+        invite["_id"] = invite.get("id") or "invite-id"
+
+    return jsonify({"success": True, "invited": True, "invite": invite}), 200
+
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from ai_engine.core.llm import (
+    chat_completion,
+    configured_provider,
+    default_model_for,
+    extract_text,
+    has_llm_config,
+)
+from backend.services.orchestrator import (
+    evaluate_work,
+    get_session,
+    handle_agent_event,
+    start_simulation,
+)
+
+load_dotenv()
+
+logging.basicConfig(
+    level=os.getenv("DAYZERO_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    force=True,
+)
+
+
+
+# Database collections are imported cleanly from db.py at the top of the file
+
+
+def update_candidate_mongodb_score(email_or_name: str | None, report: dict, submission_text: str):
+    try:
+        query = {}
+        if email_or_name:
+            query = {"$or": [{"email": email_or_name.lower().strip()}, {"name": email_or_name}]}
+        
+        user = None
+        if query:
+            user = users_collection.find_one(query)
+            
+        if not user:
+            user = users_collection.find_one(sort=[("joinedMs", -1)])
+            
+        if user:
+            raw_overall = report.get("overall_score", 0)
+            overall_score = min(raw_overall, 94)
+            skill_scores = report.get("skill_scores", {})
+            
+            skills = {
+                "Leadership": min(skill_scores.get("role_judgment", 0), 94),
+                "Communication": min(skill_scores.get("communication", 0), 94),
+                "Execution": min(skill_scores.get("technical_reasoning", 0), 94),
+                "ProblemSolving": min(skill_scores.get("problem_solving", 0), 94),
+                "Adaptability": min(skill_scores.get("collaboration", 0), 94)
+            }
+            
+            top_skill = max(skills.items(), key=lambda x: x[1])[0]
+            
+            status = "On Track"
+            if overall_score >= 85:
+                status = "Shortlisted"
+            elif overall_score < 65:
+                status = "At Risk"
+                
+            users_collection.update_one(
+                {"_id": user["_id"]},
+                {"$set": {
+                    "score": overall_score,
+                    "progress": 100,
+                    "topSkill": top_skill,
+                    "status": status,
+                    "skills": skills,
+                    "submission": submission_text
+                }, "$push": {
+                    "sessions": {
+                        "report": report,
+                        "submittedAt": datetime.utcnow().isoformat()
+                    }
+                }}
+            )
+            app.logger.info(f"Updated candidate scores in MongoDB for: {user.get('email')}")
+        else:
+            app.logger.warning("No candidate found in MongoDB to update scores.")
+    except Exception as e:
+        app.logger.error(f"Failed to update candidate scores in MongoDB: {str(e)}")
+
+
+skill_records_collection = mongo_db["skill_records"]
+submissions_collection = mongo_db["submissions"]
+observer_notes_collection = mongo_db["observer_notes"]
+
+
+def _mongo_doc(doc: dict | None) -> dict | None:
+    if not doc:
+        return None
+    clean = dict(doc)
+    if "_id" in clean:
+        clean["_id"] = str(clean["_id"])
+    return clean
+
+
+def get_skill_record(session_id: str) -> dict | None:
+    record = skill_records_collection.find_one({"session_id": session_id}, sort=[("createdAt", -1)])
+    return _mongo_doc(record)
+
+
+def create_submission(payload: dict) -> dict:
+    now = datetime.utcnow().isoformat()
+    session_id = str(payload.get("session_id") or "")
+    submission_text = str(payload.get("submission_text") or payload.get("submission") or "")
+    record = {
+        "session_id": session_id,
+        "submission_text": submission_text,
+        "workspace_snapshot": payload.get("workspace_snapshot"),
+        "user": payload.get("user"),
+        "user_id": payload.get("user_id"),
+        "user_name": payload.get("user_name"),
+        "user_email": payload.get("user_email"),
+        "status": "submitted",
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    result = submissions_collection.insert_one(record)
+    record["_id"] = str(result.inserted_id)
+    skill_records_collection.update_one(
+        {"session_id": session_id},
+        {"$set": {**record, "updatedAt": now}, "$setOnInsert": {"createdAt": now}},
+        upsert=True,
+    )
+    return {"success": True, "submission": record, "skill_record": get_skill_record(session_id)}
+
+
+def save_observer_note(payload: dict) -> dict:
+    now = datetime.utcnow().isoformat()
+    note = {
+        "session_id": str(payload.get("session_id") or ""),
+        "note": str(payload.get("note") or "").strip(),
+        "note_type": str(payload.get("note_type") or "observation"),
+        "agent_id": payload.get("agent_id"),
+        "createdAt": now,
+    }
+    result = observer_notes_collection.insert_one(note)
+    note["_id"] = str(result.inserted_id)
+    return {"success": True, "note": note}
+
+
+def get_observer_notes(session_id: str) -> list[dict]:
+    notes = observer_notes_collection.find({"session_id": session_id}).sort("createdAt", 1)
+    return [_mongo_doc(note) for note in notes]
+
+
+
+DEFAULT_FAST_MAX_TOKENS = 160
+
+
+def _preview(value: object, limit: int = 140) -> str:
+    text = str(value or "").replace("\n", " ").strip()
+    return text[:limit] + ("..." if len(text) > limit else "")
+
+
+@app.route("/api/projects", methods=["GET"])
+def get_projects():
+    try:
+        company_id = request.args.get("companyId")
+        query = {}
+        if company_id:
+            query["companyId"] = company_id
+        projs = list(projects_collection.find(query))
+        for p in projs:
+            p["_id"] = str(p["_id"])
+        return jsonify({"success": True, "projects": projs}), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching projects: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/projects/<project_id>", methods=["GET"])
+def get_project_by_id(project_id):
+    try:
+        project = _find_project_by_id(project_id)
+        if not project:
+            return jsonify({"success": False, "error": "Project not found"}), 404
+        if "_id" in project:
+            project["_id"] = str(project["_id"])
+        return jsonify({"success": True, "project": project}), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching project {project_id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"ok": True, "message": "DayZero backend running"}), 200
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    import urllib.parse
+    provider = configured_provider()
+    
+    db_status = "Unknown"
+    db_error = None
+    masked_uri = "None"
+    
+    try:
+        from db import get_client, MONGO_URI
+        if MONGO_URI:
+            parsed = urllib.parse.urlparse(MONGO_URI)
+            netloc = parsed.netloc
+            if "@" in netloc:
+                netloc = "masked_user:masked_password@" + netloc.split("@", 1)[1]
+            masked_uri = urllib.parse.urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+            
+        client = get_client()
+        client.admin.command('ping')
+        db_status = "Connected"
+    except Exception as e:
+        db_status = "Failed"
+        db_error = str(e)
+        
+    return jsonify({
+        "ok": True,
+        "llm_configured": has_llm_config(),
+        "llm_provider": provider,
+        "llm_model": default_model_for(provider) if provider else None,
+        "database": {
+            "status": db_status,
+            "error": db_error,
+            "uri": masked_uri
+        }
+    }), 200
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    incoming = request.get_json(silent=True) or {}
+
+    if "messages" in incoming:
+        messages = incoming.get("messages") or []
+    else:
+        user_message = str(incoming.get("message") or "")
+        system_prompt = str(incoming.get("system_prompt") or "You are a helpful assistant.")
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+    response = chat_completion(
+        messages=messages,
+        model=incoming.get("model"),
+        max_tokens=int(incoming.get("max_tokens") or DEFAULT_FAST_MAX_TOKENS),
+        temperature=float(incoming.get("temperature") or 0.6),
+        response_format=incoming.get("response_format"),
+        timeout=12,
+        agent=incoming.get("agent") or "api-chat",
+        route=incoming.get("route") or "live_chat",
+    )
+
+    if not response:
+        app.logger.warning(
+            "api_chat provider=%s status=failed model=%s messages=%s",
+            configured_provider() or "none",
+            incoming.get("model") or "default",
+            len(messages),
+        )
+        return jsonify({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "I am here. Keep the next DayZero move concrete: decision, tradeoff, and proof."
+                }
+            }],
+            "_dayzero_provider": "demo-safe",
+            "_dayzero_model": "role-fallback",
+        }), 200
+
+    app.logger.info(
+        "api_chat provider=%s status=ok model=%s messages=%s reply_chars=%s",
+        response.get("_dayzero_provider") or configured_provider() or "unknown",
+        response.get("_dayzero_model") or response.get("model") or incoming.get("model") or "default",
+        len(messages),
+        len(extract_text(response) or ""),
+    )
+
+    return jsonify(response), 200
+
+
+def _find_project_by_id(project_id_arg):
+    if not project_id_arg:
+        return None
+    # Try direct match (string or whatever type it is)
+    project = projects_collection.find_one({"id": project_id_arg}) or projects_collection.find_one({"_id": project_id_arg})
+    
+    # Try numeric conversion
+    if not project:
+        try:
+            int_id = int(project_id_arg)
+            project = projects_collection.find_one({"id": int_id}) or projects_collection.find_one({"_id": int_id})
+        except (ValueError, TypeError):
+            pass
+            
+    # Try string conversion
+    if not project:
+        try:
+            str_id = str(project_id_arg)
+            project = projects_collection.find_one({"id": str_id}) or projects_collection.find_one({"_id": str_id})
+        except Exception:
+            pass
+            
+    # Try MongoDB ObjectId conversion
+    if not project:
+        from bson import ObjectId
+        try:
+            obj_id = ObjectId(project_id_arg)
+            project = projects_collection.find_one({"_id": obj_id}) or projects_collection.find_one({"id": obj_id})
+        except Exception:
+            pass
+            
+    return project
+
+
+def _resolve_db_driven_simulation_args(payload: dict):
+    import uuid
+    task_id = request.args.get("task_id") or payload.get("task_id")
+    role = request.args.get("role") or payload.get("role")
+    participant_name = request.args.get("participant_name") or payload.get("participant_name")
+    task_context = payload.get("task_context") or {}
+
+    email = payload.get("candidateEmail") or payload.get("email")
+    project_id_arg = payload.get("projectId") or task_id
+    
+    # 1. Look up invite by email to find assigned project
+    invite = None
+    if email:
+        invite = _get_valid_invite(email)
+        if invite:
+            project_id_arg = invite.get("projectId") or project_id_arg
+            role = invite.get("role") or invite.get("roleAssigned") or invite.get("assignedRole") or role
+            participant_name = invite.get("name") or invite.get("candidateName") or participant_name
+            
+    # 2. Look up project details in database
+    project = _find_project_by_id(project_id_arg)
+        
+    if not project and invite and invite.get("projectTitle"):
+        project = projects_collection.find_one({"title": {"$regex": f"^{re.escape(invite.get('projectTitle'))}$", "$options": "i"}})
+        
+    # 3. If found in database, override context dynamically!
+    if project or invite:
+        db_context = {
+            "id": project_id_arg or str(uuid.uuid4()),
+            "company": (invite.get("companyName") if invite else None) or (project.get("companyId") if project else None) or "Corporate Partner",
+            "title": (project.get("title") if project else None) or (invite.get("projectTitle") if invite else None) or "Assigned Simulation Sprint",
+            "role": role or (project.get("role") if project else None) or "Software Engineer",
+            "description": (project.get("description") if project else None) or "Develop the primary user interface and logic for the assigned corporate simulation room.",
+            "difficulty": (invite.get("experienceLevel") if invite else None) or (project.get("difficulty") if project else None) or "Intermediate",
+        }
+        
+        # Add tech stack & skills
+        skills = (invite.get("skills") if invite else None) or (project.get("techStack") if project else None)
+        if skills:
+            if isinstance(skills, list):
+                db_context["skills"] = [str(s).strip() for s in skills]
+            else:
+                db_context["skills"] = [str(s).strip() for s in str(skills).split(",")]
+                
+        # Resolve files
+        if project and project.get("workspace_files"):
+            db_context["workspace_files"] = project.get("workspace_files")
+            
+        task_context = {**task_context, **db_context}
+        
+        # If the resolved role is generic, overwrite it with the actual task role
+        role_val = db_context.get("role") or role
+        if role_val and any(generic in str(role_val).lower() for generic in ("candidate", "user", "guest")):
+            actual_role = (invite.get("role") or invite.get("roleAssigned") or invite.get("assignedRole") if invite else None) or (project.get("role") if project else None)
+            if actual_role:
+                db_context["role"] = actual_role
+                role = actual_role
+        
+        # Dynamically set task_id based on role to load correct starter files & agents
+        if not task_id:
+            role_lower = str(db_context["role"]).lower()
+            if any(token in role_lower for token in ("frontend", "web", "react", "html", "css", "js", "client", "interface")):
+                task_id = "vr-marketplace"
+            elif any(token in role_lower for token in ("backend", "api", "server", "database", "sql")):
+                task_id = "login-recovery"
+            elif any(token in role_lower for token in ("qa", "test", "quality")):
+                task_id = "qa-release"
+            elif any(token in role_lower for token in ("data", "analyst", "metrics", "fraud")):
+                task_id = "fraud-dashboard"
+            elif any(token in role_lower for token in ("design", "designer", "ux", "ui")):
+                task_id = "docs-update"
+            else:
+                task_id = "mobile-growth"
+                
+    return task_id, role, participant_name, task_context
+
+
+@app.route("/api/simulation/start", methods=["GET", "POST"])
+def api_start_simulation():
+    payload = request.get_json(silent=True) or {}
+
+    task_id, role, participant_name, task_context = _resolve_db_driven_simulation_args(payload)
+    
+    data = start_simulation(
+        task_id=task_id,
+        role=role,
+        participant_name=participant_name,
+        task_context=task_context,
+    )
+
+    return jsonify(data), 200
+
+
+@app.route("/start-simulation", methods=["POST"])
+def legacy_start_simulation():
+    payload = request.get_json(silent=True) or {}
+
+    task_id, role, participant_name, task_context = _resolve_db_driven_simulation_args(payload)
+    
+    data = start_simulation(
+        task_id=task_id,
+        role=role,
+        participant_name=participant_name,
+        task_context=task_context,
+    )
+
+    return jsonify({
+        "task": data.get("task_text"),
+        "session_id": data.get("session_id"),
+        "task_id": data.get("task", {}).get("id"),
+        "task_data": data.get("task"),
+        "initial_messages": data.get("initial_messages"),
+        "memory": data.get("memory"),
+        "scores": data.get("scores"),
+        "phase": data.get("phase"),
+    }), 200
+
+
+@app.route("/api/sessions", methods=["POST"])
+def api_create_session():
+    payload = request.get_json(silent=True) or {}
+
+    task_id, role, participant_name, task_context = _resolve_db_driven_simulation_args(payload)
+    
+    data = start_simulation(
+        task_id=task_id,
+        role=role,
+        participant_name=participant_name,
+        task_context=task_context,
+    )
+
+    return jsonify(data), 200
+
+
+@app.route("/api/sessions/<session_id>", methods=["GET"])
+def api_get_session(session_id: str):
+    session = get_session(session_id)
+
+    if not session:
+        return jsonify({"error": "Session not found."}), 404
+
+    return jsonify(session), 200
+
+
+@app.route("/api/sessions/<session_id>/chat", methods=["POST"])
+def api_session_chat(session_id: str):
+    payload = request.get_json(silent=True) or {}
+    app.logger.info(
+        "session_chat request session=%s mode=%s channel=%s target=%s message=%s",
+        session_id,
+        payload.get("mode") or "team",
+        payload.get("channel_id") or payload.get("channel") or "team",
+        payload.get("target_agent_id") or payload.get("agentId") or payload.get("agent_id") or "",
+        _preview(payload.get("message")),
+    )
+
+    data = handle_agent_event({
+        "session_id": session_id,
+        "event_type": "candidate_message",
+        "mode": payload.get("mode"),
+        "agentId": payload.get("agentId") or payload.get("agent_id"),
+        "task_id": payload.get("taskId") or payload.get("task_id"),
+        "candidate_message": payload.get("message"),
+        "candidate_name": payload.get("candidate_name"),
+        "active_file": payload.get("active_file"),
+        "current_task": payload.get("currentTask") or payload.get("current_task"),
+        "task_context": payload.get("task_context"),
+        "workspace_files": payload.get("workspaceFiles") or payload.get("workspace_files"),
+        "workspace_snapshot": payload.get("workspace_snapshot"),
+        "code": payload.get("code"),
+        "channel_id": payload.get("channel_id") or payload.get("channel"),
+        "target_agent_id": payload.get("target_agent_id"),
+    })
+
+    app.logger.info(
+        "session_chat response session=%s phase=%s new_messages=%s primary_agent=%s primary=%s",
+        session_id,
+        data.get("phase"),
+        len(data.get("new_messages") or []),
+        (data.get("agent") or {}).get("name") or "",
+        _preview(data.get("message")),
+    )
+
+    return jsonify(data), 200
+
+
+@app.route("/api/sessions/<session_id>/tests", methods=["POST"])
+def api_session_tests(session_id: str):
+    payload = request.get_json(silent=True) or {}
+    app.logger.info(
+        "session_tests request session=%s mode=%s channel=%s message=%s",
+        session_id,
+        payload.get("mode") or "team",
+        payload.get("channel_id") or payload.get("channel") or "team",
+        _preview(payload.get("message")),
+    )
+
+    data = handle_agent_event({
+        "session_id": session_id,
+        "event_type": "run_tests",
+        "mode": payload.get("mode"),
+        "agentId": payload.get("agentId") or payload.get("agent_id"),
+        "task_id": payload.get("taskId") or payload.get("task_id"),
+        "candidate_message": payload.get("message") or "I ran the latest checks.",
+        "candidate_name": payload.get("candidate_name"),
+        "active_file": payload.get("active_file"),
+        "current_task": payload.get("currentTask") or payload.get("current_task"),
+        "task_context": payload.get("task_context"),
+        "workspace_files": payload.get("workspaceFiles") or payload.get("workspace_files"),
+        "workspace_snapshot": payload.get("workspace_snapshot"),
+        "code": payload.get("code"),
+        "test_results": payload.get("test_results") or {},
+        "channel_id": payload.get("channel_id") or payload.get("channel"),
+        "target_agent_id": payload.get("target_agent_id"),
+    })
+
+    app.logger.info(
+        "session_tests response session=%s phase=%s new_messages=%s",
+        session_id,
+        data.get("phase"),
+        len(data.get("new_messages") or []),
+    )
+
+    return jsonify(data), 200
+
+
+@app.route("/api/sessions/<session_id>/submit", methods=["POST"])
+def api_session_submit(session_id: str):
+    payload = request.get_json(silent=True) or {}
+    submission = str(payload.get("submission") or payload.get("code") or "")
+    app.logger.info(
+        "session_submit request session=%s chars=%s reason=%s",
+        session_id,
+        len(submission),
+        payload.get("reason") or "submitted",
+    )
+
+    data = handle_agent_event({
+        "session_id": session_id,
+        "event_type": "submit_solution",
+        "mode": payload.get("mode"),
+        "task_id": payload.get("taskId") or payload.get("task_id"),
+        "candidate_message": submission[:500],
+        "candidate_name": payload.get("candidate_name"),
+        "active_file": payload.get("active_file"),
+        "current_task": payload.get("currentTask") or payload.get("current_task"),
+        "task_context": payload.get("task_context"),
+        "workspace_files": payload.get("workspaceFiles") or payload.get("workspace_files"),
+        "workspace_snapshot": payload.get("workspace_snapshot"),
+        "code": submission,
+    })
+
+    report = data.get("report") or data
+    email_or_name = payload.get("user_email") or payload.get("candidate_name") or ""
+    update_candidate_mongodb_score(email_or_name, report, submission)
+
+    app.logger.info(
+        "session_submit response session=%s report=%s overall=%s",
+        session_id,
+        bool(data.get("report")),
+        (data.get("report") or {}).get("overall_score"),
+    )
+
+    return jsonify(report), 200
+
+
+
+@app.route("/api/agent/event", methods=["POST"])
+def api_agent_event():
+    payload = request.get_json(silent=True) or {}
+    app.logger.info(
+        "agent_event request session=%s type=%s message=%s",
+        payload.get("session_id") or "",
+        payload.get("event_type") or "candidate_message",
+        _preview(payload.get("candidate_message") or payload.get("message")),
+    )
+    data = handle_agent_event(payload)
+    app.logger.info(
+        "agent_event response session=%s phase=%s new_messages=%s primary=%s",
+        data.get("session_id") or "",
+        data.get("phase"),
+        len(data.get("new_messages") or []),
+        _preview(data.get("message")),
+    )
+    return jsonify(data), 200
+
+
+@app.route("/submit-task", methods=["POST"])
+def submit_task():
+    payload = request.get_json(silent=True) or {}
+
+    submission = str(payload.get("submission") or "")
+    role = str(payload.get("role") or "Frontend")
+    session_id = payload.get("session_id")
+
+    if session_id:
+        result = handle_agent_event({
+            "session_id": session_id,
+            "event_type": "submit_solution",
+            "candidate_message": submission[:500],
+            "code": submission,
+            "phase": "submission",
+        })
+
+        report = result.get("report") or {}
+
+        return jsonify({
+            "score": report.get("overall_score", 0),
+            "feedback": report.get("summary") or result.get("message") or "",
+            "report": report,
+        }), 200
+
+    evaluation = evaluate_work(submission=submission, role=role)
+    return jsonify(evaluation), 200
+
+
+@app.route("/api/evaluate", methods=["POST"])
+def api_evaluate():
+    payload = request.get_json(silent=True) or {}
+
+    submission = str(payload.get("submission") or payload.get("code") or "")
+    role = str(payload.get("role") or "Frontend")
+
+    evaluation = evaluate_work(submission=submission, role=role)
+    return jsonify(evaluation), 200
+
+'''
+users_collection.update_one(
+    {"email": user_email},
+    {
+        "$set": {
+            "score": final_score,
+            "progress": 100,
+            "status": "shortlisted" if final_score >= 85 else "on-track",
+            "topSkill": top_skill,
+            "skills": skill_breakdown
+        },
+
+        "$push": {
+            "sessions": session_data
+        }
+    }
+)
+''' 
+
+@app.route("/api/sessions/<session_id>/skill-record", methods=["GET"])
+def api_get_skill_record(session_id: str):
+    skill_record = get_skill_record(session_id)
+
+    if not skill_record:
+        return jsonify({"error": "SkillRecord not found."}), 404
+
+    return jsonify(skill_record), 200
+
+
+@app.route("/api/sessions/<session_id>/skill-record", methods=["POST"])
+def api_create_skill_record(session_id: str):
+    payload = request.get_json(silent=True) or {}
+
+    data = create_submission({
+        "session_id": session_id,
+        "submission_text": payload.get("submission") or payload.get("submission_text") or "",
+        "user": payload.get("user"),
+        "user_id": payload.get("user_id"),
+        "user_name": payload.get("user_name"),
+        "user_email": payload.get("user_email"),
+        "workspace_snapshot": payload.get("workspace_snapshot"),
+    })
+
+    return jsonify(data), 200
+
+
+@app.route("/api/sessions/<session_id>/observer-notes", methods=["GET"])
+def api_get_observer_notes(session_id: str):
+    notes = get_observer_notes(session_id)
+    return jsonify({"notes": notes}), 200
+
+
+@app.route("/api/sessions/<session_id>/observer-notes", methods=["POST"])
+def api_save_observer_note(session_id: str):
+    payload = request.get_json(silent=True) or {}
+
+    data = save_observer_note({
+        "session_id": session_id,
+        "note": payload.get("note"),
+        "note_type": payload.get("note_type") or "observation",
+        "agent_id": payload.get("agent_id"),
+    })
+
+    return jsonify(data), 200
+
+
+@app.route("/api/ping-llm", methods=["GET"])
+def ping_llm():
+    if not has_llm_config():
+        return jsonify({
+            "ok": False,
+            "message": "Live AI check is not ready yet; demo safety replies are enabled."
+        }), 200
+
+    response = chat_completion(
+        messages=[{"role": "user", "content": "Reply with the single word ready."}],
+        max_tokens=5,
+        temperature=0,
+        timeout=8,
+    )
+
+    if not response:
+        return jsonify({"ok": False, "message": "Live AI check is warming up; demo safety replies are enabled."}), 200
+
+    return jsonify({
+        "ok": True,
+        "reply": extract_text(response) or "ready",
+        "provider": response.get("_dayzero_provider") or configured_provider(),
+        "model": response.get("_dayzero_model") or default_model_for(configured_provider()),
+    }), 200
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 5001))
+    
+    # Verify MongoDB Connection on startup
+    try:
+        from db import get_client
+        client = get_client()
+        # Ping the admin database to verify connection
+        client.admin.command('ping')
+        print("Connected to MongoDB")
+        app.logger.info("Connected to MongoDB successfully.")
+    except Exception as db_err:
+        print(f"Failed to connect to MongoDB: {db_err}")
+        app.logger.error(f"Failed to connect to MongoDB: {db_err}")
+        
+    print(f"Server running on PORT {port}")
+    app.logger.info(f"Server running on PORT {port}")
+    
+    print("Invite routes registered")
+    app.logger.info("Invite routes registered: POST /api/invites, POST /api/invite-candidate")
+    
+    app.run(debug=False, host="0.0.0.0", port=port)
