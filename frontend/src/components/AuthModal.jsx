@@ -339,19 +339,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login', showToast }) => {
         </button>
 
         {/* Left Pane: Branding & Demo Shortcuts */}
-        <div 
-          className="auth-left"
-          style={{
-            width: '40%',
-            padding: '36px 28px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            background: 'linear-gradient(135deg, #271E3B 0%, #151022 100%)',
-            color: '#F2EFF9',
-            borderRight: '1px solid rgba(159, 134, 181, 0.18)'
-          }}
-        >
+        <div className="auth-left">
           <div>
             <div 
               style={{
@@ -453,18 +441,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login', showToast }) => {
         </div>
 
         {/* Right Pane: Interactive Form Controls */}
-        <div 
-          className="auth-right"
-          style={{
-            width: '60%',
-            padding: '36px 32px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            background: 'var(--rec-surface, #ffffff)',
-            color: 'var(--rec-text, #312A44)'
-          }}
-        >
+        <div className="auth-right">
           {/* User vs Recruiter Segmented Toggle */}
           <div 
             style={{
